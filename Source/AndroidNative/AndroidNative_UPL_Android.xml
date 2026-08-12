@@ -69,6 +69,9 @@
     <addPermission android:name="com.android.permission.READ_EXTERNAL_STORAGE"/>
     <addPermission android:name="com.android.permission.WRITE_EXTERNAL_STORAGE"/>
 
+    <!-- Required by MakePhoneCall (ACTION_CALL). Without it the dialer fallback is used. -->
+    <addPermission android:name="android.permission.CALL_PHONE"/>
+
   </androidManifestUpdates>
 
 
