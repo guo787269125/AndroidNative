@@ -73,8 +73,11 @@ done
 pass "all expected JNI methods present ($(wc -w <<<"$EXPECTED_METHODS") methods)"
 
 step "2/4 Dex the compiled class into an Android classes.dex"
-"$BUILD_TOOLS_DIR/d8" --output "$WORK" --lib "$ANDROID_JAR" "$CLASS" 2> "$WORK/d8.log" || {
-  cat "$WORK/d8.log"; fail "d8 failed to dex the compiled class"; }
+# Dex every produced .class (DeviceInfo plus any nested/anonymous classes such
+# as the NSD RegistrationListener), since d8 needs nest mates on the class path.
+mapfile -t ALL_CLASSES < <(find "$WORK/classes" -name '*.class')
+"$BUILD_TOOLS_DIR/d8" --output "$WORK" --lib "$ANDROID_JAR" "${ALL_CLASSES[@]}" 2> "$WORK/d8.log" || {
+  cat "$WORK/d8.log"; fail "d8 failed to dex the compiled classes"; }
 [[ -f "$WORK/classes.dex" ]] || fail "d8 did not produce classes.dex"
 DESC="$("$BUILD_TOOLS_DIR/dexdump" "$WORK/classes.dex" | grep -c "Class descriptor  : 'Lcom/Plugins/AndroidNative/DeviceInfo;'")"
 [[ "$DESC" == "1" ]] || fail "classes.dex does not contain the expected class descriptor"
