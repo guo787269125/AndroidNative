@@ -71,3 +71,23 @@ void UAndroidNativeLibrary::CopyTextToClipboard(const FString& InText)
 {
 	AndroidNativeUtils::CallJavaStaticMethod<void>(DeviceInfoClassName, "CopyToClipboard", FAndroidGameActivity(), InText);
 }
+
+bool UAndroidNativeLibrary::SetTorchEnabled(bool bEnabled)
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "SetTorchEnabled", FAndroidGameActivity(), bEnabled);
+}
+
+bool UAndroidNativeLibrary::OpenGallery()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "OpenGallery", FAndroidGameActivity());
+}
+
+bool UAndroidNativeLibrary::MakePhoneCall(const FString& PhoneNumber)
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "MakePhoneCall", FAndroidGameActivity(), PhoneNumber);
+}
+
+bool UAndroidNativeLibrary::SendEmail(const FString& Recipient, const FString& Subject, const FString& Body)
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "SendEmail", FAndroidGameActivity(), Recipient, Subject, Body);
+}

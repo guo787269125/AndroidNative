@@ -100,4 +100,30 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Basic")
 	static void CopyTextToClipboard(const FString& InText);
+
+	/**
+	 * Turn the device flashlight (torch) on or off. Returns true if the torch state was applied
+	 * (requires Android 6.0 / API 23 or newer and a camera with a flash unit)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Hardware")
+	static bool SetTorchEnabled(bool bEnabled);
+
+	/**
+	 * Open the system gallery / photos app so the user can browse images
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Intents")
+	static bool OpenGallery();
+
+	/**
+	 * Start a phone call to the given number. Requires the "android.permission.CALL_PHONE"
+	 * runtime permission; if it is not granted, the dialer is opened pre-filled with the number instead
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Intents")
+	static bool MakePhoneCall(const FString& PhoneNumber);
+
+	/**
+	 * Open the system email composer pre-filled with the given recipient, subject and body
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Intents")
+	static bool SendEmail(const FString& Recipient, const FString& Subject, const FString& Body);
 };

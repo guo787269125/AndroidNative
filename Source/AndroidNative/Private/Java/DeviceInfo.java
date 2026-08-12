@@ -24,6 +24,13 @@ import android.content.res.Configuration;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 
+// Hardware / Intents
+import android.content.Intent;
+import android.net.Uri;
+import android.provider.MediaStore;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CameraCharacteristics;
+
 // NSD Service
 import android.os.IBinder;
 import android.app.Service;
@@ -185,5 +192,113 @@ public class DeviceInfo {
                 
         // Set the clipboard's primary clip
         clipboard.setPrimaryClip(clip);
+	}
+
+	/**
+	 * Toggle the device flashlight (torch). Returns true if the torch state was applied.
+	 * Requires API 23 (Marshmallow) or newer.
+	 */
+	@Keep
+	public static boolean SetTorchEnabled(final Activity activity, boolean enabled) {
+		try {
+			if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+				return false;
+			}
+
+			CameraManager cameraManager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+			if (cameraManager == null) {
+				return false;
+			}
+
+			String targetCameraId = null;
+			for (String cameraId : cameraManager.getCameraIdList()) {
+				CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
+				Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+				if (hasFlash == null || !hasFlash) {
+					continue;
+				}
+
+				Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+				if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK) {
+					targetCameraId = cameraId;
+					break;
+				}
+
+				if (targetCameraId == null) {
+					// Remember the first camera that has a flash as a fallback
+					targetCameraId = cameraId;
+				}
+			}
+
+			if (targetCameraId == null) {
+				return false;
+			}
+
+			cameraManager.setTorchMode(targetCameraId, enabled);
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Open the system gallery / photos app so the user can browse images.
+	 */
+	@Keep
+	public static boolean OpenGallery(final Activity activity) {
+		try {
+			Intent intent = new Intent(Intent.ACTION_VIEW, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			activity.startActivity(intent);
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Start a phone call to the given number. Requires the CALL_PHONE permission to be granted
+	 * at runtime; otherwise it falls back to opening the dialer pre-filled with the number.
+	 */
+	@Keep
+	public static boolean MakePhoneCall(final Activity activity, String phoneNumber) {
+		try {
+			Intent intent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + phoneNumber));
+			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			activity.startActivity(intent);
+			return true;
+		} catch (SecurityException e) {
+			// CALL_PHONE permission not granted, fall back to the dialer (never needs a permission)
+			try {
+				Intent dialIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phoneNumber));
+				dialIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+				activity.startActivity(dialIntent);
+				return true;
+			} catch (Exception ex) {
+				return false;
+			}
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Open the system email composer pre-filled with the given recipient, subject and body.
+	 */
+	@Keep
+	public static boolean SendEmail(final Activity activity, String recipient, String subject, String body) {
+		try {
+			Intent intent = new Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"));
+			if (recipient != null && !recipient.isEmpty()) {
+				intent.putExtra(Intent.EXTRA_EMAIL, new String[]{recipient});
+			}
+			intent.putExtra(Intent.EXTRA_SUBJECT, subject != null ? subject : "");
+			intent.putExtra(Intent.EXTRA_TEXT, body != null ? body : "");
+			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			activity.startActivity(intent);
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
 	}
 }
