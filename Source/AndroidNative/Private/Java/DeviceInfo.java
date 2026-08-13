@@ -49,33 +49,65 @@ public class DeviceInfo {
 	static NsdManager.RegistrationListener listener;
 	static Context context;
 
-@Keep
+	// Cached id of a camera that has a flash unit (resolved lazily, reused across torch calls)
+	static String flashCameraId;
+	static boolean flashCameraResolved;
+
+	@Keep
 	public static void startNsdService(final Activity activity, int Port) {
-				
-		context = activity;
-				
-		nsdManager = (NsdManager)context.getSystemService(Context.NSD_SERVICE);
+		try {
+			context = activity;
 
-		nsdServiceInfo = new NsdServiceInfo();
-		nsdServiceInfo.setServiceName("NdiNsdService");
-		nsdServiceInfo.setServiceType("_ndi._tcp.");
-		nsdServiceInfo.setPort(Port);
+			// Tear down any previously registered service so repeated calls don't leak a listener.
+			StopNsdService();
 
-		nsdManager.registerService(nsdServiceInfo, NsdManager.PROTOCOL_DNS_SD, new NsdManager.RegistrationListener() {
+			nsdManager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
+			if (nsdManager == null) {
+				return;
+			}
 
-			@Override
-			public void onRegistrationFailed(NsdServiceInfo nsdServiceInfo, int i) {}
+			nsdServiceInfo = new NsdServiceInfo();
+			nsdServiceInfo.setServiceName("NdiNsdService");
+			nsdServiceInfo.setServiceType("_ndi._tcp.");
+			nsdServiceInfo.setPort(Port);
 
-			@Override
-			public void onUnregistrationFailed(NsdServiceInfo nsdServiceInfo, int i) {}
+			// Keep a reference to the listener so the service can be unregistered later.
+			listener = new NsdManager.RegistrationListener() {
 
-			@Override
-			public void onServiceRegistered(NsdServiceInfo nsdServiceInfo) {}
+				@Override
+				public void onRegistrationFailed(NsdServiceInfo nsdServiceInfo, int i) {}
 
-			@Override
-			public void onServiceUnregistered(NsdServiceInfo nsdServiceInfo) {}
-		});
-	}	
+				@Override
+				public void onUnregistrationFailed(NsdServiceInfo nsdServiceInfo, int i) {}
+
+				@Override
+				public void onServiceRegistered(NsdServiceInfo nsdServiceInfo) {}
+
+				@Override
+				public void onServiceUnregistered(NsdServiceInfo nsdServiceInfo) {}
+			};
+
+			nsdManager.registerService(nsdServiceInfo, NsdManager.PROTOCOL_DNS_SD, listener);
+		} catch (Exception e) {
+			// NSD registration is best-effort
+		}
+	}
+
+	/**
+	 * Stop a previously started NSD service. Safe to call even if nothing is registered.
+	 */
+	@Keep
+	public static void StopNsdService() {
+		try {
+			if (nsdManager != null && listener != null) {
+				nsdManager.unregisterService(listener);
+			}
+		} catch (Exception e) {
+			// May already be unregistered
+		} finally {
+			listener = null;
+		}
+	}
 
     @Keep
     public static String GetGeoLocation(final Activity activity)
@@ -211,38 +243,68 @@ public class DeviceInfo {
 	public static String GetLanguageCode()	{
 		return ConfigurationCompat.getLocales(Resources.getSystem().getConfiguration()).get(0).getDefault().toLanguageTag();
 	}
+
+	/**
+	 * Gather the basic device info in a single JNI round-trip. Order:
+	 * [0]=UniqueID, [1]=OSVersion, [2]=SDKVersion, [3]=Brand, [4]=Model,
+	 * [5]=Product, [6]=Language, [7]=LanguageCode.
+	 */
+	@Keep
+	public static String[] GetBaseDeviceInfo(final Activity activity) {
+		String[] info = new String[8];
+		info[0] = GetUniqueID(activity);
+		info[1] = GetOSVersion();
+		info[2] = String.valueOf(GetSDKVersion());
+		info[3] = GetBrand();
+		info[4] = GetModel();
+		info[5] = GetProduct();
+		info[6] = GetLanguage();
+		info[7] = GetLanguageCode();
+		return info;
+	}
 	
 	@Keep
-	public static void CopyToClipboard(final Activity activity, String text){
-	    Context context = activity;
-	    
-	    // Get the ClipboardManager service
-        ClipboardManager clipboard = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-                
-        // Create a new ClipData with the specified text
-        ClipData clip = ClipData.newPlainText("label", text);
-                
-        // Set the clipboard's primary clip
-        clipboard.setPrimaryClip(clip);
+	public static void CopyToClipboard(final Activity activity, final String text){
+		// ClipboardManager must be used on a Looper (UI) thread, so post it there.
+		activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					ClipboardManager clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+					if (clipboard == null) {
+						return;
+					}
+					ClipData clip = ClipData.newPlainText("label", text);
+					clipboard.setPrimaryClip(clip);
+				} catch (Exception e) {
+					// Ignore clipboard failures
+				}
+			}
+		});
 	}
 
 	/**
-	 * Toggle the device flashlight (torch). Returns true if the torch state was applied.
-	 * Requires API 23 (Marshmallow) or newer.
+	 * Resolve (and cache) the id of a camera that has a flash unit. Prefers a back-facing
+	 * camera and falls back to the first camera with a flash. Returns null if none / unsupported.
 	 */
-	@Keep
-	public static boolean SetTorchEnabled(final Activity activity, boolean enabled) {
+	private static String GetFlashCameraId(final Activity activity) {
+		if (flashCameraResolved) {
+			return flashCameraId;
+		}
+
+		flashCameraResolved = true;
+		flashCameraId = null;
+
 		try {
 			if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-				return false;
+				return null;
 			}
 
 			CameraManager cameraManager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
 			if (cameraManager == null) {
-				return false;
+				return null;
 			}
 
-			String targetCameraId = null;
 			for (String cameraId : cameraManager.getCameraIdList()) {
 				CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
 				Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
@@ -252,21 +314,48 @@ public class DeviceInfo {
 
 				Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
 				if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK) {
-					targetCameraId = cameraId;
-					break;
+					flashCameraId = cameraId;
+					return flashCameraId;
 				}
 
-				if (targetCameraId == null) {
+				if (flashCameraId == null) {
 					// Remember the first camera that has a flash as a fallback
-					targetCameraId = cameraId;
+					flashCameraId = cameraId;
 				}
 			}
+		} catch (Exception e) {
+			flashCameraId = null;
+		}
 
-			if (targetCameraId == null) {
+		return flashCameraId;
+	}
+
+	/**
+	 * Returns true if the device has a camera flash that can be used as a torch (API 23+).
+	 */
+	@Keep
+	public static boolean IsTorchAvailable(final Activity activity) {
+		return GetFlashCameraId(activity) != null;
+	}
+
+	/**
+	 * Toggle the device flashlight (torch). Returns true if the torch state was applied.
+	 * Requires API 23 (Marshmallow) or newer and a camera with a flash unit.
+	 */
+	@Keep
+	public static boolean SetTorchEnabled(final Activity activity, boolean enabled) {
+		try {
+			String cameraId = GetFlashCameraId(activity);
+			if (cameraId == null) {
 				return false;
 			}
 
-			cameraManager.setTorchMode(targetCameraId, enabled);
+			CameraManager cameraManager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+			if (cameraManager == null) {
+				return false;
+			}
+
+			cameraManager.setTorchMode(cameraId, enabled);
 			return true;
 		} catch (Exception e) {
 			return false;
@@ -278,11 +367,21 @@ public class DeviceInfo {
 	 */
 	@Keep
 	public static boolean OpenGallery(final Activity activity) {
+		Intent intent = new Intent(Intent.ACTION_VIEW, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+		intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 		try {
-			Intent intent = new Intent(Intent.ACTION_VIEW, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 			activity.startActivity(intent);
 			return true;
+		} catch (android.content.ActivityNotFoundException e) {
+			// No default gallery app: offer a chooser as a fallback
+			try {
+				Intent chooser = Intent.createChooser(intent, "Open gallery");
+				chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+				activity.startActivity(chooser);
+				return true;
+			} catch (Exception ex) {
+				return false;
+			}
 		} catch (Exception e) {
 			return false;
 		}
@@ -294,15 +393,17 @@ public class DeviceInfo {
 	 */
 	@Keep
 	public static boolean MakePhoneCall(final Activity activity, String phoneNumber) {
+		// Uri.fromParts avoids mis-parsing numbers that contain characters like '#' or '+'.
+		Uri phoneUri = Uri.fromParts("tel", phoneNumber, null);
 		try {
-			Intent intent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + phoneNumber));
+			Intent intent = new Intent(Intent.ACTION_CALL, phoneUri);
 			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 			activity.startActivity(intent);
 			return true;
 		} catch (SecurityException e) {
 			// CALL_PHONE permission not granted, fall back to the dialer (never needs a permission)
 			try {
-				Intent dialIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phoneNumber));
+				Intent dialIntent = new Intent(Intent.ACTION_DIAL, phoneUri);
 				dialIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 				activity.startActivity(dialIntent);
 				return true;
