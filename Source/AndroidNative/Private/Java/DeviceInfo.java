@@ -51,6 +51,10 @@ import android.os.StatFs;
 import android.os.Environment;
 import android.content.pm.ActivityInfo;
 
+// Permissions
+import android.content.pm.PackageManager;
+import androidx.core.content.ContextCompat;
+
 // NSD Service
 import android.os.IBinder;
 import android.app.Service;
@@ -954,6 +958,16 @@ public class DeviceInfo {
 			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 			activity.startActivity(intent);
 			return true;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/** True if the given runtime permission (e.g. "android.permission.CAMERA") is currently granted. */
+	@Keep
+	public static boolean IsPermissionGranted(final Activity activity, String permission) {
+		try {
+			return ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED;
 		} catch (Exception e) {
 			return false;
 		}

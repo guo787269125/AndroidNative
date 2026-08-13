@@ -248,3 +248,8 @@ bool UAndroidNativeLibrary::OpenApp(const FString& PackageName)
 {
 	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "OpenApp", FAndroidGameActivity(), PackageName);
 }
+
+bool UAndroidNativeLibrary::IsPermissionGranted(const FString& Permission)
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "IsPermissionGranted", FAndroidGameActivity(), Permission);
+}

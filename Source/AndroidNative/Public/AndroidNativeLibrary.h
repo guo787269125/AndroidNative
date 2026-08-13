@@ -332,4 +332,11 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Intents")
 	static bool OpenApp(const FString& PackageName);
+
+	/**
+	 * True if the given runtime permission (e.g. "android.permission.CAMERA") is currently granted.
+	 * To request a permission at runtime, use the RequestAndroidPermissions async node.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Permissions")
+	static bool IsPermissionGranted(const FString& Permission);
 };
