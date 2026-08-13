@@ -140,63 +140,50 @@
 
 
   <!--
-    Runtime permission bridge.
-    NOTE: these additions inject into Unreal's GameActivity. The mangled JNI name in
-    AndroidNativePermissions.cpp must match your engine's GameActivity package:
-      - UE4 / early UE5 : com.epicgames.ue4.GameActivity
-      - UE5 (5.0+)      : com.epicgames.unreal.GameActivity
-    This plugin's UPL already references com.epicgames.ue4.* (see SplashActivity above),
-    so the C++ uses the ue4 name by default.
+    Callback bridges. These GameActivity hooks simply forward events to static native
+    methods on our own com.Plugins.AndroidNative.DeviceInfo class, so the JNI symbol
+    names in AndroidNativeCallbacks.cpp are engine-version independent (no need to match
+    com.epicgames.ue4 vs com.epicgames.unreal).
   -->
-  <gameActivityImportAdditions>
-    <insert>
-      import androidx.core.app.ActivityCompat;
-      import androidx.core.content.ContextCompat;
-      import android.content.pm.PackageManager;
-    </insert>
-  </gameActivityImportAdditions>
-
-  <gameActivityClassAdditions>
-    <insert>
-      // Implemented natively in AndroidNativePermissions.cpp
-      public native void nativeAndroidNativeOnPermissionResult(String[] permissions, boolean[] granted);
-
-      public void AndroidNative_RequestPermissions(final String[] permissions) {
-        try {
-          java.util.ArrayList&lt;String&gt; toRequest = new java.util.ArrayList&lt;String&gt;();
-          for (String p : permissions) {
-            if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-              toRequest.add(p);
-            }
-          }
-
-          if (toRequest.isEmpty()) {
-            boolean[] granted = new boolean[permissions.length];
-            for (int i = 0; i &lt; permissions.length; i++) { granted[i] = true; }
-            nativeAndroidNativeOnPermissionResult(permissions, granted);
-            return;
-          }
-
-          ActivityCompat.requestPermissions(this, toRequest.toArray(new String[0]), 11011);
-        } catch (Exception e) {
-          boolean[] granted = new boolean[permissions.length];
-          nativeAndroidNativeOnPermissionResult(permissions, granted);
-        }
-      }
-    </insert>
-  </gameActivityClassAdditions>
-
   <gameActivityOnRequestPermissionsResultAdditions>
     <insert>
       if (requestCode == 11011) {
-        boolean[] granted = new boolean[grantResults.length];
+        boolean[] an_granted = new boolean[grantResults.length];
         for (int i = 0; i &lt; grantResults.length; i++) {
-          granted[i] = (grantResults[i] == PackageManager.PERMISSION_GRANTED);
+          an_granted[i] = (grantResults[i] == android.content.pm.PackageManager.PERMISSION_GRANTED);
         }
-        nativeAndroidNativeOnPermissionResult(permissions, granted);
+        com.Plugins.AndroidNative.DeviceInfo.nativeOnPermissionResult(permissions, an_granted);
       }
     </insert>
   </gameActivityOnRequestPermissionsResultAdditions>
+
+  <gameActivityOnActivityResultAdditions>
+    <insert>
+      {
+        String an_uri = "";
+        try { if (data != null &amp;&amp; data.getData() != null) an_uri = data.getData().toString(); } catch (Exception e) {}
+        com.Plugins.AndroidNative.DeviceInfo.nativeOnActivityResult(requestCode, resultCode, an_uri);
+      }
+    </insert>
+  </gameActivityOnActivityResultAdditions>
+
+  <gameActivityOnResumeAdditions>
+    <insert>
+      com.Plugins.AndroidNative.DeviceInfo.nativeOnLifecycle(1);
+    </insert>
+  </gameActivityOnResumeAdditions>
+
+  <gameActivityOnPauseAdditions>
+    <insert>
+      com.Plugins.AndroidNative.DeviceInfo.nativeOnLifecycle(2);
+    </insert>
+  </gameActivityOnPauseAdditions>
+
+  <gameActivityOnStopAdditions>
+    <insert>
+      com.Plugins.AndroidNative.DeviceInfo.nativeOnLifecycle(3);
+    </insert>
+  </gameActivityOnStopAdditions>
 
 
 </root>

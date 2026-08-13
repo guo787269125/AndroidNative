@@ -16,9 +16,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FAndroidNativePermissionResult, con
  * Blueprint async node that requests one or more Android runtime permissions and
  * fires OnResult when the user responds (or immediately if already granted).
  *
- * Implementation note: the result is delivered from Unreal's GameActivity via a
- * native JNI callback (see AndroidNativePermissions.cpp + the UPL GameActivity
- * additions). This requires an on-device Unreal build to compile and verify.
+ * Implementation note: the result is delivered via a native JNI callback routed
+ * through com.Plugins.AndroidNative.DeviceInfo (see AndroidNativePermissions.cpp +
+ * the UPL GameActivity onRequestPermissionsResult addition). Requires an on-device
+ * Unreal build to compile and verify.
  */
 UCLASS()
 class ANDROIDNATIVE_API URequestAndroidPermissionsProxy : public UBlueprintAsyncActionBase

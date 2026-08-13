@@ -54,6 +54,19 @@ import android.content.pm.ActivityInfo;
 // Permissions
 import android.content.pm.PackageManager;
 import androidx.core.content.ContextCompat;
+import androidx.core.app.ActivityCompat;
+
+// Sensors
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+
+// Notifications
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 
 // NSD Service
 import android.os.IBinder;
@@ -72,6 +85,16 @@ public class DeviceInfo {
 	// Cached id of a camera that has a flash unit (resolved lazily, reused across torch calls)
 	static String flashCameraId;
 	static boolean flashCameraResolved;
+
+	// Active sensor listeners keyed by Android sensor type
+	static final java.util.HashMap<Integer, SensorEventListener> sensorListeners = new java.util.HashMap<Integer, SensorEventListener>();
+
+	// Native callbacks implemented in C++ (AndroidNativeCallbacks.cpp). Routed through this
+	// class so the JNI symbol names are engine-version independent.
+	@Keep public static native void nativeOnPermissionResult(String[] permissions, boolean[] granted);
+	@Keep public static native void nativeOnActivityResult(int requestCode, int resultCode, String dataUri);
+	@Keep public static native void nativeOnLifecycle(int lifecycleEvent);
+	@Keep public static native void nativeOnSensorChanged(int sensorType, float x, float y, float z);
 
 	@Keep
 	public static void startNsdService(final Activity activity, int Port) {
@@ -968,6 +991,151 @@ public class DeviceInfo {
 	public static boolean IsPermissionGranted(final Activity activity, String permission) {
 		try {
 			return ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Request runtime permissions. Already-granted permissions resolve immediately via
+	 * nativeOnPermissionResult; the rest are requested and their result is delivered from
+	 * GameActivity.onRequestPermissionsResult (see the UPL additions).
+	 */
+	@Keep
+	public static void RequestPermissions(final Activity activity, final String[] permissions) {
+		try {
+			java.util.ArrayList<String> toRequest = new java.util.ArrayList<String>();
+			for (String p : permissions) {
+				if (ContextCompat.checkSelfPermission(activity, p) != PackageManager.PERMISSION_GRANTED) {
+					toRequest.add(p);
+				}
+			}
+
+			if (toRequest.isEmpty()) {
+				boolean[] granted = new boolean[permissions.length];
+				for (int i = 0; i < permissions.length; i++) {
+					granted[i] = true;
+				}
+				nativeOnPermissionResult(permissions, granted);
+				return;
+			}
+
+			ActivityCompat.requestPermissions(activity, toRequest.toArray(new String[0]), 11011);
+		} catch (Exception e) {
+			nativeOnPermissionResult(permissions, new boolean[permissions.length]);
+		}
+	}
+
+	/** Launch an image picker; the result arrives via nativeOnActivityResult(requestCode, ...). */
+	@Keep
+	public static void PickImageFromGallery(final Activity activity, int requestCode) {
+		try {
+			Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+			intent.setType("image/*");
+			activity.startActivityForResult(intent, requestCode);
+		} catch (Exception e) {
+			nativeOnActivityResult(requestCode, 0, "");
+		}
+	}
+
+	/** Launch a file picker with the given MIME type (defaults to any). */
+	@Keep
+	public static void PickFile(final Activity activity, int requestCode, String mimeType) {
+		try {
+			Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+			intent.setType((mimeType != null && !mimeType.isEmpty()) ? mimeType : "*/*");
+			activity.startActivityForResult(intent, requestCode);
+		} catch (Exception e) {
+			nativeOnActivityResult(requestCode, 0, "");
+		}
+	}
+
+	/** Start streaming a sensor (sensorType is an android.hardware.Sensor.TYPE_* value). */
+	@Keep
+	public static boolean StartSensor(final Activity activity, final int sensorType) {
+		try {
+			final SensorManager sensorManager = (SensorManager) activity.getSystemService(Context.SENSOR_SERVICE);
+			if (sensorManager == null) {
+				return false;
+			}
+			Sensor sensor = sensorManager.getDefaultSensor(sensorType);
+			if (sensor == null) {
+				return false;
+			}
+			if (sensorListeners.containsKey(sensorType)) {
+				return true;
+			}
+
+			SensorEventListener listener = new SensorEventListener() {
+				@Override
+				public void onSensorChanged(SensorEvent event) {
+					float x = event.values.length > 0 ? event.values[0] : 0f;
+					float y = event.values.length > 1 ? event.values[1] : 0f;
+					float z = event.values.length > 2 ? event.values[2] : 0f;
+					nativeOnSensorChanged(sensorType, x, y, z);
+				}
+
+				@Override
+				public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+			};
+
+			sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME);
+			sensorListeners.put(sensorType, listener);
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/** Stop streaming a previously started sensor. */
+	@Keep
+	public static void StopSensor(final Activity activity, final int sensorType) {
+		try {
+			SensorManager sensorManager = (SensorManager) activity.getSystemService(Context.SENSOR_SERVICE);
+			SensorEventListener listener = sensorListeners.remove(sensorType);
+			if (sensorManager != null && listener != null) {
+				sensorManager.unregisterListener(listener);
+			}
+		} catch (Exception e) {
+			// Ignore
+		}
+	}
+
+	/**
+	 * Post a simple notification. On Android 13+ this requires the POST_NOTIFICATIONS
+	 * runtime permission to actually be shown.
+	 */
+	@Keep
+	public static void ShowNotification(final Activity activity, String title, String text, int notificationId) {
+		try {
+			final String channelId = "androidnative_default";
+			NotificationManager manager = (NotificationManager) activity.getSystemService(Context.NOTIFICATION_SERVICE);
+			if (manager == null) {
+				return;
+			}
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+				NotificationChannel channel = new NotificationChannel(channelId, "General", NotificationManager.IMPORTANCE_DEFAULT);
+				manager.createNotificationChannel(channel);
+			}
+
+			int icon = activity.getApplicationInfo().icon;
+			NotificationCompat.Builder builder = new NotificationCompat.Builder(activity, channelId)
+				.setSmallIcon(icon != 0 ? icon : android.R.drawable.ic_dialog_info)
+				.setContentTitle(title != null ? title : "")
+				.setContentText(text != null ? text : "")
+				.setAutoCancel(true);
+
+			NotificationManagerCompat.from(activity).notify(notificationId, builder.build());
+		} catch (Exception e) {
+			// Ignore
+		}
+	}
+
+	/** True if the app is currently allowed to post notifications. */
+	@Keep
+	public static boolean AreNotificationsEnabled(final Activity activity) {
+		try {
+			return NotificationManagerCompat.from(activity).areNotificationsEnabled();
 		} catch (Exception e) {
 			return false;
 		}

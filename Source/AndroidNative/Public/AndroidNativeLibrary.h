@@ -339,4 +339,17 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Permissions")
 	static bool IsPermissionGranted(const FString& Permission);
+
+	/**
+	 * Post a simple notification. On Android 13+ requires the POST_NOTIFICATIONS runtime
+	 * permission (request it via RequestAndroidPermissions) to actually be shown
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Notifications")
+	static void ShowNotification(const FString& Title, const FString& Text, int32 NotificationId);
+
+	/**
+	 * True if the app is currently allowed to post notifications
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Notifications")
+	static bool AreNotificationsEnabled();
 };

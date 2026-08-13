@@ -253,3 +253,13 @@ bool UAndroidNativeLibrary::IsPermissionGranted(const FString& Permission)
 {
 	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "IsPermissionGranted", FAndroidGameActivity(), Permission);
 }
+
+void UAndroidNativeLibrary::ShowNotification(const FString& Title, const FString& Text, int32 NotificationId)
+{
+	AndroidNativeUtils::CallJavaStaticMethod<void>(DeviceInfoClassName, "ShowNotification", FAndroidGameActivity(), Title, Text, NotificationId);
+}
+
+bool UAndroidNativeLibrary::AreNotificationsEnabled()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "AreNotificationsEnabled", FAndroidGameActivity());
+}
