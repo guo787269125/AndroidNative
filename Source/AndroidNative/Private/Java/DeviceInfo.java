@@ -35,6 +35,15 @@ import android.provider.MediaStore;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraCharacteristics;
 
+// Batch 1: system utilities
+import android.os.Vibrator;
+import android.os.VibratorManager;
+import android.os.VibrationEffect;
+import android.os.BatteryManager;
+import android.widget.Toast;
+import android.content.IntentFilter;
+import android.content.pm.PackageInfo;
+
 // NSD Service
 import android.os.IBinder;
 import android.app.Service;
@@ -432,6 +441,209 @@ public class DeviceInfo {
 			return true;
 		} catch (Exception e) {
 			return false;
+		}
+	}
+
+	// ---------------------------------------------------------------------------
+	// Batch 1: system utilities
+	// ---------------------------------------------------------------------------
+
+	/**
+	 * Vibrate the device for the given number of milliseconds. Requires the VIBRATE permission.
+	 */
+	@Keep
+	public static void Vibrate(final Activity activity, int milliseconds) {
+		try {
+			if (milliseconds <= 0) {
+				return;
+			}
+
+			Vibrator vibrator;
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+				VibratorManager vibratorManager = (VibratorManager) activity.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+				vibrator = (vibratorManager != null) ? vibratorManager.getDefaultVibrator() : null;
+			} else {
+				vibrator = (Vibrator) activity.getSystemService(Context.VIBRATOR_SERVICE);
+			}
+
+			if (vibrator == null || !vibrator.hasVibrator()) {
+				return;
+			}
+
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+				vibrator.vibrate(VibrationEffect.createOneShot(milliseconds, VibrationEffect.DEFAULT_AMPLITUDE));
+			} else {
+				vibrator.vibrate(milliseconds);
+			}
+		} catch (Exception e) {
+			// Ignore
+		}
+	}
+
+	/**
+	 * Show a system Toast message. Runs on the UI thread.
+	 */
+	@Keep
+	public static void ShowToast(final Activity activity, final String message, final boolean longDuration) {
+		activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					Toast.makeText(activity, message, longDuration ? Toast.LENGTH_LONG : Toast.LENGTH_SHORT).show();
+				} catch (Exception e) {
+					// Ignore
+				}
+			}
+		});
+	}
+
+	/**
+	 * Open the system share sheet with the given plain text.
+	 */
+	@Keep
+	public static boolean ShareText(final Activity activity, String text, String title) {
+		try {
+			Intent intent = new Intent(Intent.ACTION_SEND);
+			intent.setType("text/plain");
+			intent.putExtra(Intent.EXTRA_TEXT, text != null ? text : "");
+
+			Intent chooser = Intent.createChooser(intent, (title != null && !title.isEmpty()) ? title : "Share");
+			chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			activity.startActivity(chooser);
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Battery level as a percentage in [0, 100], or -1 if it can't be read.
+	 */
+	@Keep
+	public static int GetBatteryLevel(final Activity activity) {
+		try {
+			Intent batteryStatus = activity.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+			if (batteryStatus == null) {
+				return -1;
+			}
+			int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+			int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+			if (level < 0 || scale <= 0) {
+				return -1;
+			}
+			return Math.round(level * 100f / scale);
+		} catch (Exception e) {
+			return -1;
+		}
+	}
+
+	/**
+	 * True if the device is currently charging or already full.
+	 */
+	@Keep
+	public static boolean IsCharging(final Activity activity) {
+		try {
+			Intent batteryStatus = activity.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+			if (batteryStatus == null) {
+				return false;
+			}
+			int status = batteryStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+			return status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Keep the screen on (or release the request). Runs on the UI thread.
+	 */
+	@Keep
+	public static void SetKeepScreenOn(final Activity activity, final boolean keepOn) {
+		activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					if (keepOn) {
+						activity.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+					} else {
+						activity.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+					}
+				} catch (Exception e) {
+					// Ignore
+				}
+			}
+		});
+	}
+
+	/**
+	 * Open the given URL in the default browser / handler.
+	 */
+	@Keep
+	public static boolean OpenURL(final Activity activity, String url) {
+		try {
+			Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			activity.startActivity(intent);
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Open this application's system settings (details) page.
+	 */
+	@Keep
+	public static boolean OpenAppSettings(final Activity activity) {
+		try {
+			Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+				Uri.fromParts("package", activity.getPackageName(), null));
+			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			activity.startActivity(intent);
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Application version name (e.g. "1.2.3"), or empty string on failure.
+	 */
+	@Keep
+	public static String GetAppVersion(final Activity activity) {
+		try {
+			PackageInfo packageInfo = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0);
+			return packageInfo.versionName != null ? packageInfo.versionName : "";
+		} catch (Exception e) {
+			return "";
+		}
+	}
+
+	/**
+	 * Application version code, or -1 on failure.
+	 */
+	@Keep
+	public static int GetAppVersionCode(final Activity activity) {
+		try {
+			PackageInfo packageInfo = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0);
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+				return (int) packageInfo.getLongVersionCode();
+			}
+			return packageInfo.versionCode;
+		} catch (Exception e) {
+			return -1;
+		}
+	}
+
+	/**
+	 * Application package name (e.g. "com.company.game").
+	 */
+	@Keep
+	public static String GetPackageName(final Activity activity) {
+		try {
+			return activity.getPackageName();
+		} catch (Exception e) {
+			return "";
 		}
 	}
 }

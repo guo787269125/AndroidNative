@@ -138,4 +138,70 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Intents")
 	static bool SendEmail(const FString& Recipient, const FString& Subject, const FString& Body);
+
+	/**
+	 * Vibrate the device for the given duration. Requires the "android.permission.VIBRATE" permission
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Hardware")
+	static void Vibrate(int32 DurationMilliseconds);
+
+	/**
+	 * Show a system Toast message (bLongDuration selects LENGTH_LONG vs LENGTH_SHORT)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static void ShowToast(const FString& Message, bool bLongDuration);
+
+	/**
+	 * Open the system share sheet with the given plain text
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Intents")
+	static bool ShareText(const FString& Text, const FString& Title);
+
+	/**
+	 * Battery level as a percentage in [0, 100], or -1 if unavailable
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static int32 GetBatteryLevel();
+
+	/**
+	 * True if the device is currently charging or already full
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static bool IsCharging();
+
+	/**
+	 * Keep the screen on while your app is in the foreground (or release the request)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static void SetKeepScreenOn(bool bKeepOn);
+
+	/**
+	 * Open the given URL in the default browser / handler
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Intents")
+	static bool OpenURL(const FString& Url);
+
+	/**
+	 * Open this application's system settings (details) page
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Intents")
+	static bool OpenAppSettings();
+
+	/**
+	 * Application version name (e.g. "1.2.3"), or empty on failure
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static FString GetAppVersion();
+
+	/**
+	 * Application version code, or -1 on failure
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static int32 GetAppVersionCode();
+
+	/**
+	 * Application package name (e.g. "com.company.game")
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static FString GetPackageName();
 };

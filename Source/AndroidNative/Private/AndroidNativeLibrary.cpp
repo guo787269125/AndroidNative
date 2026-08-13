@@ -95,3 +95,58 @@ bool UAndroidNativeLibrary::SendEmail(const FString& Recipient, const FString& S
 {
 	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "SendEmail", FAndroidGameActivity(), Recipient, Subject, Body);
 }
+
+void UAndroidNativeLibrary::Vibrate(int32 DurationMilliseconds)
+{
+	AndroidNativeUtils::CallJavaStaticMethod<void>(DeviceInfoClassName, "Vibrate", FAndroidGameActivity(), DurationMilliseconds);
+}
+
+void UAndroidNativeLibrary::ShowToast(const FString& Message, bool bLongDuration)
+{
+	AndroidNativeUtils::CallJavaStaticMethod<void>(DeviceInfoClassName, "ShowToast", FAndroidGameActivity(), Message, bLongDuration);
+}
+
+bool UAndroidNativeLibrary::ShareText(const FString& Text, const FString& Title)
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "ShareText", FAndroidGameActivity(), Text, Title);
+}
+
+int32 UAndroidNativeLibrary::GetBatteryLevel()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<int32>(DeviceInfoClassName, "GetBatteryLevel", FAndroidGameActivity());
+}
+
+bool UAndroidNativeLibrary::IsCharging()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "IsCharging", FAndroidGameActivity());
+}
+
+void UAndroidNativeLibrary::SetKeepScreenOn(bool bKeepOn)
+{
+	AndroidNativeUtils::CallJavaStaticMethod<void>(DeviceInfoClassName, "SetKeepScreenOn", FAndroidGameActivity(), bKeepOn);
+}
+
+bool UAndroidNativeLibrary::OpenURL(const FString& Url)
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "OpenURL", FAndroidGameActivity(), Url);
+}
+
+bool UAndroidNativeLibrary::OpenAppSettings()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "OpenAppSettings", FAndroidGameActivity());
+}
+
+FString UAndroidNativeLibrary::GetAppVersion()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<FString>(DeviceInfoClassName, "GetAppVersion", FAndroidGameActivity());
+}
+
+int32 UAndroidNativeLibrary::GetAppVersionCode()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<int32>(DeviceInfoClassName, "GetAppVersionCode", FAndroidGameActivity());
+}
+
+FString UAndroidNativeLibrary::GetPackageName()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<FString>(DeviceInfoClassName, "GetPackageName", FAndroidGameActivity());
+}
