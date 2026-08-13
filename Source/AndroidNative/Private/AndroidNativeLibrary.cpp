@@ -12,6 +12,11 @@ void UAndroidNativeLibrary::EnableNsdService(int32 InPort)
 	AndroidNativeUtils::CallJavaStaticMethod<void>(DeviceInfoClassName, "startNsdService", FAndroidGameActivity(), InPort);
 }
 
+void UAndroidNativeLibrary::DisableNsdService()
+{
+	AndroidNativeUtils::CallJavaStaticMethod<void>(DeviceInfoClassName, "StopNsdService");
+}
+
 bool UAndroidNativeLibrary::IsInternetAvailable()
 {
 	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "IsInternetAvailable", FAndroidGameActivity());
@@ -24,26 +29,20 @@ FString UAndroidNativeLibrary::GetGeoLocation()
 
 FBaseDeviceInfo UAndroidNativeLibrary::GetBaseDeviceInfo()
 {
-	
-	FString UniqueID{AndroidNativeUtils::CallJavaStaticMethod<FString>(DeviceInfoClassName, "GetUniqueID", FAndroidGameActivity())};
-	FString OSVersion{AndroidNativeUtils::CallJavaStaticMethod<FString>(DeviceInfoClassName, "GetOSVersion")};
-	const int32 SDKVersion{AndroidNativeUtils::CallJavaStaticMethod<int32>(DeviceInfoClassName, "GetSDKVersion")};
-	FString Brand{AndroidNativeUtils::CallJavaStaticMethod<FString>(DeviceInfoClassName, "GetBrand")};
-	FString Model{AndroidNativeUtils::CallJavaStaticMethod<FString>(DeviceInfoClassName, "GetModel")};
-	FString Product{AndroidNativeUtils::CallJavaStaticMethod<FString>(DeviceInfoClassName, "GetProduct")};
-	FString Language{AndroidNativeUtils::CallJavaStaticMethod<FString>(DeviceInfoClassName, "GetLanguage")};
-	FString LanguageCode{AndroidNativeUtils::CallJavaStaticMethod<FString>(DeviceInfoClassName, "GetLanguageCode")};
+	// Fetch everything in a single JNI round-trip (the Java side fills the array).
+	const TArray<FString> Info{AndroidNativeUtils::CallJavaStaticMethod<TArray<FString>>(DeviceInfoClassName, "GetBaseDeviceInfo", FAndroidGameActivity())};
 
 	FBaseDeviceInfo Result;
+	if (Info.Num() >= 8)
 	{
-		Result.UniqueID = MoveTemp(UniqueID);
-		Result.OSVersion = MoveTemp(OSVersion);
-		Result.SDKVersion = SDKVersion;
-		Result.Brand = MoveTemp(Brand);
-		Result.Model = MoveTemp(Model);
-		Result.Product = MoveTemp(Product);
-		Result.Language = MoveTemp(Language);
-		Result.LanguageCode = MoveTemp(LanguageCode);
+		Result.UniqueID = Info[0];
+		Result.OSVersion = Info[1];
+		Result.SDKVersion = FCString::Atoi(*Info[2]);
+		Result.Brand = Info[3];
+		Result.Model = Info[4];
+		Result.Product = Info[5];
+		Result.Language = Info[6];
+		Result.LanguageCode = Info[7];
 	}
 
 	return Result;
@@ -70,6 +69,11 @@ FString UAndroidNativeLibrary::GetExternalPath()
 void UAndroidNativeLibrary::CopyTextToClipboard(const FString& InText)
 {
 	AndroidNativeUtils::CallJavaStaticMethod<void>(DeviceInfoClassName, "CopyToClipboard", FAndroidGameActivity(), InText);
+}
+
+bool UAndroidNativeLibrary::IsTorchAvailable()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "IsTorchAvailable", FAndroidGameActivity());
 }
 
 bool UAndroidNativeLibrary::SetTorchEnabled(bool bEnabled)

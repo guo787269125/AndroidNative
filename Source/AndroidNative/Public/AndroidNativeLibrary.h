@@ -64,6 +64,12 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Services|NSD")
 	static void EnableNsdService(int32 InPort);
+
+	/**
+	 * Stop a previously started NSD Service. Safe to call even if none is running.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Services|NSD")
+	static void DisableNsdService();
 	
 	/**
 	 * Check if the internet is available at the moment
@@ -100,6 +106,12 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Basic")
 	static void CopyTextToClipboard(const FString& InText);
+
+	/**
+	 * Returns true if the device has a camera flash that can be used as a torch (Android 6.0 / API 23+)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Hardware")
+	static bool IsTorchAvailable();
 
 	/**
 	 * Turn the device flashlight (torch) on or off. Returns true if the torch state was applied
