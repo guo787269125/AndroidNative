@@ -50,6 +50,32 @@ enum class EAndroidTheme : uint8
 };
 
 /**
+ * Requested screen orientation
+ */
+UENUM(BlueprintType, Category = "Android Native Library|Enumerators")
+enum class EScreenOrientation : uint8
+{
+	Unspecified,
+	Portrait,
+	Landscape,
+	ReversePortrait,
+	ReverseLandscape,
+	Sensor
+};
+
+/**
+ * Active network transport type
+ */
+UENUM(BlueprintType, Category = "Android Native Library|Enumerators")
+enum class EAndroidNetworkType : uint8
+{
+	None,
+	WiFi,
+	Cellular,
+	Other
+};
+
+/**
  * Library for interacting with android device
  */
 UCLASS(BlueprintType, Category = "Android Native Library")
@@ -204,4 +230,106 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
 	static FString GetPackageName();
+
+	/**
+	 * Set the app window brightness. Percent in [0,100], or a negative value to follow the system
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static void SetScreenBrightness(int32 Percent);
+
+	/**
+	 * Current app window brightness in [0,100], or -1 if it follows the system
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static int32 GetScreenBrightness();
+
+	/**
+	 * Lock/request the screen orientation
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static void SetScreenOrientation(EScreenOrientation Orientation);
+
+	/**
+	 * Set the music-stream volume. Percent in [0,100]
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static void SetMusicVolume(int32 Percent);
+
+	/**
+	 * Music-stream volume as a percentage in [0,100], or -1 on failure
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static int32 GetMusicVolume();
+
+	/**
+	 * Active network transport type
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static EAndroidNetworkType GetNetworkType();
+
+	/**
+	 * Total physical RAM in MB, or -1 on failure
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static int32 GetTotalMemoryMB();
+
+	/**
+	 * Available RAM in MB, or -1 on failure
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static int32 GetAvailableMemoryMB();
+
+	/**
+	 * Total internal storage in MB, or -1 on failure
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static int32 GetTotalStorageMB();
+
+	/**
+	 * Available internal storage in MB, or -1 on failure
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static int32 GetAvailableStorageMB();
+
+	/**
+	 * Status bar height in pixels (0 if unknown)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static int32 GetStatusBarHeight();
+
+	/**
+	 * Navigation bar height in pixels (0 if unknown)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static int32 GetNavigationBarHeight();
+
+	/**
+	 * Enable/disable sticky immersive fullscreen
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|System")
+	static void SetImmersiveMode(bool bEnabled);
+
+	/**
+	 * Open a maps app at the given coordinates (Label is an optional marker title)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Intents")
+	static bool OpenMap(float Latitude, float Longitude, const FString& Label);
+
+	/**
+	 * Read the current clipboard text (empty if none)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Basic")
+	static FString GetClipboardText();
+
+	/**
+	 * True if the given package is installed (subject to Android 11+ package visibility)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Intents")
+	static bool IsAppInstalled(const FString& PackageName);
+
+	/**
+	 * Launch another installed app by package name (subject to Android 11+ package visibility)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Android Native Library|Intents")
+	static bool OpenApp(const FString& PackageName);
 };

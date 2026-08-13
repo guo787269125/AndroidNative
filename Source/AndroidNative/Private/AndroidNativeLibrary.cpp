@@ -150,3 +150,101 @@ FString UAndroidNativeLibrary::GetPackageName()
 {
 	return AndroidNativeUtils::CallJavaStaticMethod<FString>(DeviceInfoClassName, "GetPackageName", FAndroidGameActivity());
 }
+
+void UAndroidNativeLibrary::SetScreenBrightness(int32 Percent)
+{
+	AndroidNativeUtils::CallJavaStaticMethod<void>(DeviceInfoClassName, "SetScreenBrightness", FAndroidGameActivity(), Percent);
+}
+
+int32 UAndroidNativeLibrary::GetScreenBrightness()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<int32>(DeviceInfoClassName, "GetScreenBrightness", FAndroidGameActivity());
+}
+
+void UAndroidNativeLibrary::SetScreenOrientation(EScreenOrientation Orientation)
+{
+	AndroidNativeUtils::CallJavaStaticMethod<void>(DeviceInfoClassName, "SetScreenOrientation", FAndroidGameActivity(), static_cast<int32>(Orientation));
+}
+
+void UAndroidNativeLibrary::SetMusicVolume(int32 Percent)
+{
+	AndroidNativeUtils::CallJavaStaticMethod<void>(DeviceInfoClassName, "SetMusicVolume", FAndroidGameActivity(), Percent);
+}
+
+int32 UAndroidNativeLibrary::GetMusicVolume()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<int32>(DeviceInfoClassName, "GetMusicVolume", FAndroidGameActivity());
+}
+
+EAndroidNetworkType UAndroidNativeLibrary::GetNetworkType()
+{
+	const int32 Type{AndroidNativeUtils::CallJavaStaticMethod<int32>(DeviceInfoClassName, "GetNetworkType", FAndroidGameActivity())};
+	switch (Type)
+	{
+	case 1: return EAndroidNetworkType::WiFi;
+	case 2: return EAndroidNetworkType::Cellular;
+	case 3: return EAndroidNetworkType::Other;
+	default: return EAndroidNetworkType::None;
+	}
+}
+
+int32 UAndroidNativeLibrary::GetTotalMemoryMB()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<int32>(DeviceInfoClassName, "GetTotalMemoryMB", FAndroidGameActivity());
+}
+
+int32 UAndroidNativeLibrary::GetAvailableMemoryMB()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<int32>(DeviceInfoClassName, "GetAvailableMemoryMB", FAndroidGameActivity());
+}
+
+int32 UAndroidNativeLibrary::GetTotalStorageMB()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<int32>(DeviceInfoClassName, "GetTotalStorageMB", FAndroidGameActivity());
+}
+
+int32 UAndroidNativeLibrary::GetAvailableStorageMB()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<int32>(DeviceInfoClassName, "GetAvailableStorageMB", FAndroidGameActivity());
+}
+
+int32 UAndroidNativeLibrary::GetStatusBarHeight()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<int32>(DeviceInfoClassName, "GetStatusBarHeight", FAndroidGameActivity());
+}
+
+int32 UAndroidNativeLibrary::GetNavigationBarHeight()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<int32>(DeviceInfoClassName, "GetNavigationBarHeight", FAndroidGameActivity());
+}
+
+void UAndroidNativeLibrary::SetImmersiveMode(bool bEnabled)
+{
+	AndroidNativeUtils::CallJavaStaticMethod<void>(DeviceInfoClassName, "SetImmersiveMode", FAndroidGameActivity(), bEnabled);
+}
+
+bool UAndroidNativeLibrary::OpenMap(float Latitude, float Longitude, const FString& Label)
+{
+	// Build the geo: URI on the C++ side so no floating-point values cross the JNI boundary.
+	FString GeoUri{FString::Printf(TEXT("geo:%f,%f"), Latitude, Longitude)};
+	if (!Label.IsEmpty())
+	{
+		GeoUri += FString::Printf(TEXT("?q=%f,%f(%s)"), Latitude, Longitude, *Label);
+	}
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "OpenGeoUri", FAndroidGameActivity(), GeoUri);
+}
+
+FString UAndroidNativeLibrary::GetClipboardText()
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<FString>(DeviceInfoClassName, "GetClipboardText", FAndroidGameActivity());
+}
+
+bool UAndroidNativeLibrary::IsAppInstalled(const FString& PackageName)
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "IsAppInstalled", FAndroidGameActivity(), PackageName);
+}
+
+bool UAndroidNativeLibrary::OpenApp(const FString& PackageName)
+{
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "OpenApp", FAndroidGameActivity(), PackageName);
+}

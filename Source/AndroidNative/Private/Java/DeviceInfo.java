@@ -44,6 +44,13 @@ import android.widget.Toast;
 import android.content.IntentFilter;
 import android.content.pm.PackageInfo;
 
+// Batch 2: system utilities
+import android.media.AudioManager;
+import android.app.ActivityManager;
+import android.os.StatFs;
+import android.os.Environment;
+import android.content.pm.ActivityInfo;
+
 // NSD Service
 import android.os.IBinder;
 import android.app.Service;
@@ -644,6 +651,311 @@ public class DeviceInfo {
 			return activity.getPackageName();
 		} catch (Exception e) {
 			return "";
+		}
+	}
+
+	// ---------------------------------------------------------------------------
+	// Batch 2: system utilities
+	// ---------------------------------------------------------------------------
+
+	/** Set the app window brightness. percent in [0,100], or negative to follow the system. UI thread. */
+	@Keep
+	public static void SetScreenBrightness(final Activity activity, final int percent) {
+		activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					android.view.WindowManager.LayoutParams lp = activity.getWindow().getAttributes();
+					lp.screenBrightness = (percent < 0) ? -1f : Math.max(0, Math.min(100, percent)) / 100f;
+					activity.getWindow().setAttributes(lp);
+				} catch (Exception e) {
+					// Ignore
+				}
+			}
+		});
+	}
+
+	/** Current app window brightness as a percentage in [0,100], or -1 if it follows the system. */
+	@Keep
+	public static int GetScreenBrightness(final Activity activity) {
+		try {
+			float b = activity.getWindow().getAttributes().screenBrightness;
+			if (b < 0) {
+				return -1;
+			}
+			return Math.round(b * 100);
+		} catch (Exception e) {
+			return -1;
+		}
+	}
+
+	/**
+	 * Set the requested screen orientation. mode:
+	 * 0=Unspecified, 1=Portrait, 2=Landscape, 3=ReversePortrait, 4=ReverseLandscape, 5=Sensor. UI thread.
+	 */
+	@Keep
+	public static void SetScreenOrientation(final Activity activity, final int mode) {
+		activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					int orientation;
+					switch (mode) {
+						case 1: orientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT; break;
+						case 2: orientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE; break;
+						case 3: orientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT; break;
+						case 4: orientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE; break;
+						case 5: orientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR; break;
+						default: orientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED; break;
+					}
+					activity.setRequestedOrientation(orientation);
+				} catch (Exception e) {
+					// Ignore
+				}
+			}
+		});
+	}
+
+	/** Music-stream volume as a percentage in [0,100], or -1 on failure. */
+	@Keep
+	public static int GetMusicVolume(final Activity activity) {
+		try {
+			AudioManager audioManager = (AudioManager) activity.getSystemService(Context.AUDIO_SERVICE);
+			if (audioManager == null) {
+				return -1;
+			}
+			int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+			if (max <= 0) {
+				return -1;
+			}
+			return Math.round(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) * 100f / max);
+		} catch (Exception e) {
+			return -1;
+		}
+	}
+
+	/** Set the music-stream volume. percent in [0,100]. */
+	@Keep
+	public static void SetMusicVolume(final Activity activity, int percent) {
+		try {
+			AudioManager audioManager = (AudioManager) activity.getSystemService(Context.AUDIO_SERVICE);
+			if (audioManager == null) {
+				return;
+			}
+			int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+			int value = Math.round(Math.max(0, Math.min(100, percent)) * max / 100f);
+			audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, value, 0);
+		} catch (Exception e) {
+			// May throw if Do Not Disturb policy blocks it; ignore
+		}
+	}
+
+	/** Active network type: 0=None, 1=WiFi, 2=Cellular, 3=Other. */
+	@Keep
+	public static int GetNetworkType(final Activity activity) {
+		try {
+			ConnectivityManager cm = (ConnectivityManager) activity.getSystemService(Context.CONNECTIVITY_SERVICE);
+			if (cm == null) {
+				return 0;
+			}
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+				Network network = cm.getActiveNetwork();
+				if (network == null) {
+					return 0;
+				}
+				NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+				if (caps == null) {
+					return 0;
+				}
+				if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+					return 1;
+				}
+				if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+					return 2;
+				}
+				return 3;
+			}
+
+			NetworkInfo networkInfo = cm.getActiveNetworkInfo();
+			if (networkInfo == null || !networkInfo.isConnected()) {
+				return 0;
+			}
+			int type = networkInfo.getType();
+			if (type == ConnectivityManager.TYPE_WIFI) {
+				return 1;
+			}
+			if (type == ConnectivityManager.TYPE_MOBILE) {
+				return 2;
+			}
+			return 3;
+		} catch (Exception e) {
+			return 0;
+		}
+	}
+
+	/** Total physical RAM in MB, or -1 on failure. */
+	@Keep
+	public static int GetTotalMemoryMB(final Activity activity) {
+		try {
+			ActivityManager am = (ActivityManager) activity.getSystemService(Context.ACTIVITY_SERVICE);
+			if (am == null) {
+				return -1;
+			}
+			ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+			am.getMemoryInfo(mi);
+			return (int) (mi.totalMem / (1024 * 1024));
+		} catch (Exception e) {
+			return -1;
+		}
+	}
+
+	/** Available RAM in MB, or -1 on failure. */
+	@Keep
+	public static int GetAvailableMemoryMB(final Activity activity) {
+		try {
+			ActivityManager am = (ActivityManager) activity.getSystemService(Context.ACTIVITY_SERVICE);
+			if (am == null) {
+				return -1;
+			}
+			ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+			am.getMemoryInfo(mi);
+			return (int) (mi.availMem / (1024 * 1024));
+		} catch (Exception e) {
+			return -1;
+		}
+	}
+
+	/** Total internal storage in MB, or -1 on failure. */
+	@Keep
+	public static int GetTotalStorageMB(final Activity activity) {
+		try {
+			StatFs stat = new StatFs(Environment.getDataDirectory().getPath());
+			long bytes = stat.getBlockCountLong() * stat.getBlockSizeLong();
+			return (int) (bytes / (1024 * 1024));
+		} catch (Exception e) {
+			return -1;
+		}
+	}
+
+	/** Available internal storage in MB, or -1 on failure. */
+	@Keep
+	public static int GetAvailableStorageMB(final Activity activity) {
+		try {
+			StatFs stat = new StatFs(Environment.getDataDirectory().getPath());
+			long bytes = stat.getAvailableBlocksLong() * stat.getBlockSizeLong();
+			return (int) (bytes / (1024 * 1024));
+		} catch (Exception e) {
+			return -1;
+		}
+	}
+
+	/** Status bar height in pixels (0 if unknown). */
+	@Keep
+	public static int GetStatusBarHeight(final Activity activity) {
+		try {
+			int id = activity.getResources().getIdentifier("status_bar_height", "dimen", "android");
+			return id > 0 ? activity.getResources().getDimensionPixelSize(id) : 0;
+		} catch (Exception e) {
+			return 0;
+		}
+	}
+
+	/** Navigation bar height in pixels (0 if unknown). */
+	@Keep
+	public static int GetNavigationBarHeight(final Activity activity) {
+		try {
+			int id = activity.getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+			return id > 0 ? activity.getResources().getDimensionPixelSize(id) : 0;
+		} catch (Exception e) {
+			return 0;
+		}
+	}
+
+	/** Enable/disable sticky immersive fullscreen. UI thread. */
+	@Keep
+	public static void SetImmersiveMode(final Activity activity, final boolean enabled) {
+		activity.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					android.view.View decor = activity.getWindow().getDecorView();
+					if (enabled) {
+						decor.setSystemUiVisibility(
+							android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+								| android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+								| android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+								| android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+								| android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+								| android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+					} else {
+						decor.setSystemUiVisibility(android.view.View.SYSTEM_UI_FLAG_VISIBLE);
+					}
+				} catch (Exception e) {
+					// Ignore
+				}
+			}
+		});
+	}
+
+	/** Open a geo: URI (maps). The C++ side builds the URI from coordinates/label. */
+	@Keep
+	public static boolean OpenGeoUri(final Activity activity, String uri) {
+		try {
+			Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
+			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			activity.startActivity(intent);
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/** Read the current clipboard text (empty string if none). */
+	@Keep
+	public static String GetClipboardText(final Activity activity) {
+		try {
+			ClipboardManager clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+			if (clipboard == null || !clipboard.hasPrimaryClip()) {
+				return "";
+			}
+			ClipData clip = clipboard.getPrimaryClip();
+			if (clip == null || clip.getItemCount() == 0) {
+				return "";
+			}
+			CharSequence text = clip.getItemAt(0).coerceToText(activity);
+			return text != null ? text.toString() : "";
+		} catch (Exception e) {
+			return "";
+		}
+	}
+
+	/**
+	 * True if the given package is installed. Note: on Android 11+ this is subject to
+	 * package visibility rules unless the target is declared in <queries> or is otherwise visible.
+	 */
+	@Keep
+	public static boolean IsAppInstalled(final Activity activity, String packageName) {
+		try {
+			activity.getPackageManager().getPackageInfo(packageName, 0);
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	/** Launch another installed app by package name. Subject to Android 11+ package visibility. */
+	@Keep
+	public static boolean OpenApp(final Activity activity, String packageName) {
+		try {
+			Intent intent = activity.getPackageManager().getLaunchIntentForPackage(packageName);
+			if (intent == null) {
+				return false;
+			}
+			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			activity.startActivity(intent);
+			return true;
+		} catch (Exception e) {
+			return false;
 		}
 	}
 }
