@@ -91,7 +91,7 @@
 
       repositories {
         mavenCentral()
-        jcenter()
+        google()
       }
 
       <!-- Here you can specify your own dependencies for downloading *.AAR libraries over the Internet. -->
