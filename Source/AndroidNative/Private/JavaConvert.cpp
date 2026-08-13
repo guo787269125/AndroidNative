@@ -41,6 +41,8 @@ TArray<bool> AndroidNative_JavaConverter::FromJavaBoolArray(const jbooleanArray&
 			BoolArray.Add(FromJavaBool(JavaBoolArrayPtr[Index]));
 		}
 
+		Env->ReleaseBooleanArrayElements(JavaBoolArray, const_cast<jboolean*>(JavaBoolArrayPtr), JNI_ABORT);
+
 		return BoolArray;
 	}
 
@@ -78,6 +80,8 @@ jbooleanArray AndroidNative_JavaConverter::ToJavaBoolArray(const TArray<bool>& B
 		{
 			JavaBoolArrayPtr[Index] = ToJavaBool(BoolArray[Index]);
 		}
+
+		Env->ReleaseBooleanArrayElements(JavaBoolArray, JavaBoolArrayPtr, 0);
 
 		return JavaBoolArray;
 	}
@@ -119,6 +123,8 @@ TArray<uint8> AndroidNative_JavaConverter::FromJavaByteArray(const jbyteArray Ja
 			ByteArray.Add(FromJavaByte(JavaByteArrayPtr[Index]));
 		}
 
+		Env->ReleaseByteArrayElements(JavaByteArray, const_cast<jbyte*>(JavaByteArrayPtr), JNI_ABORT);
+
 		return ByteArray;
 	}
 
@@ -156,6 +162,8 @@ jbyteArray AndroidNative_JavaConverter::ToJavaByteArray(const TArray<uint8>& Byt
 		{
 			JavaByteArrayPtr[Index] = ToJavaByte(ByteArray[Index]);
 		}
+
+		Env->ReleaseByteArrayElements(JavaByteArray, JavaByteArrayPtr, 0);
 
 		return JavaByteArray;
 	}
@@ -197,6 +205,8 @@ TArray<UTF16CHAR> AndroidNative_JavaConverter::FromJavaCharArray(const jcharArra
 			CharArray.Add(FromJavaChar(JavaCharArrayPtr[Index]));
 		}
 
+		Env->ReleaseCharArrayElements(JavaCharArray, const_cast<jchar*>(JavaCharArrayPtr), JNI_ABORT);
+
 		return CharArray;
 	}
 
@@ -234,6 +244,8 @@ jcharArray AndroidNative_JavaConverter::ToJavaCharArray(const TArray<UTF16CHAR>&
 		{
 			JavaCharArrayPtr[Index] = ToJavaChar(CharArray[Index]);
 		}
+
+		Env->ReleaseCharArrayElements(JavaCharArray, JavaCharArrayPtr, 0);
 
 		return JavaCharArray;
 	}
@@ -275,6 +287,8 @@ TArray<short> AndroidNative_JavaConverter::FromJavaShortArray(const jshortArray&
 			ShortArray.Add(FromJavaShort(JavaShortArrayPtr[Index]));
 		}
 
+		Env->ReleaseShortArrayElements(JavaShortArray, const_cast<jshort*>(JavaShortArrayPtr), JNI_ABORT);
+
 		return ShortArray;
 	}
 
@@ -312,6 +326,8 @@ jshortArray AndroidNative_JavaConverter::ToJavaShortArray(const TArray<short>& S
 		{
 			JavaShortArrayPtr[Index] = ToJavaShort(ShortArray[Index]);
 		}
+
+		Env->ReleaseShortArrayElements(JavaShortArray, JavaShortArrayPtr, 0);
 
 		return JavaShortArray;
 	}
@@ -353,6 +369,8 @@ TArray<int32> AndroidNative_JavaConverter::FromJavaIntArray(const jintArray& Jav
 			IntArray.Add(FromJavaInt(JavaIntArrayPtr[Index]));
 		}
 
+		Env->ReleaseIntArrayElements(JavaIntArray, const_cast<jint*>(JavaIntArrayPtr), JNI_ABORT);
+
 		return IntArray;
 	}
 
@@ -390,6 +408,8 @@ jintArray AndroidNative_JavaConverter::ToJavaIntArray(const TArray<int32>& IntAr
 		{
 			JavaIntArrayPtr[Index] = ToJavaInt(IntArray[Index]);
 		}
+
+		Env->ReleaseIntArrayElements(JavaIntArray, JavaIntArrayPtr, 0);
 
 		return JavaIntArray;
 	}
@@ -431,6 +451,8 @@ TArray<long> AndroidNative_JavaConverter::FromJavaLongArray(const jlongArray& Ja
 			LongArray.Add(FromJavaLong(JavaLongArrayPtr[Index]));
 		}
 
+		Env->ReleaseLongArrayElements(JavaLongArray, const_cast<jlong*>(JavaLongArrayPtr), JNI_ABORT);
+
 		return LongArray;
 	}
 
@@ -468,6 +490,8 @@ jlongArray AndroidNative_JavaConverter::ToJavaLongArray(const TArray<long>& Long
 		{
 			JavaLongArrayPtr[Index] = ToJavaLong(LongArray[Index]);
 		}
+
+		Env->ReleaseLongArrayElements(JavaLongArray, JavaLongArrayPtr, 0);
 
 		return JavaLongArray;
 	}
@@ -509,6 +533,8 @@ TArray<float> AndroidNative_JavaConverter::FromJavaFloatArray(const jfloatArray&
 			FloatArray.Add(FromJavaFloat(JavaFloatArrayPtr[Index]));
 		}
 
+		Env->ReleaseFloatArrayElements(JavaFloatArray, const_cast<jfloat*>(JavaFloatArrayPtr), JNI_ABORT);
+
 		return FloatArray;
 	}
 
@@ -546,6 +572,8 @@ jfloatArray AndroidNative_JavaConverter::ToJavaFloatArray(const TArray<float>& F
 		{
 			JavaFloatArrayPtr[Index] = ToJavaFloat(FloatArray[Index]);
 		}
+
+		Env->ReleaseFloatArrayElements(JavaFloatArray, JavaFloatArrayPtr, 0);
 
 		return JavaFloatArray;
 	}
@@ -587,6 +615,8 @@ TArray<double> AndroidNative_JavaConverter::FromJavaDoubleArray(const jdoubleArr
 			DoubleArray.Add(FromJavaDouble(JavaDoubleArrayPtr[Index]));
 		}
 
+		Env->ReleaseDoubleArrayElements(JavaDoubleArray, const_cast<jdouble*>(JavaDoubleArrayPtr), JNI_ABORT);
+
 		return DoubleArray;
 	}
 
@@ -624,6 +654,8 @@ jdoubleArray AndroidNative_JavaConverter::ToJavaDoubleArray(const TArray<double>
 		{
 			JavaDoubleArrayPtr[Index] = ToJavaDouble(DoubleArray[Index]);
 		}
+
+		Env->ReleaseDoubleArrayElements(JavaDoubleArray, JavaDoubleArrayPtr, 0);
 
 		return JavaDoubleArray;
 	}
@@ -670,6 +702,7 @@ TArray<FString> AndroidNative_JavaConverter::FromJavaStringArray(const jobjectAr
 		{
 			const jstring JavaString{static_cast<jstring>(Env->GetObjectArrayElement(JavaStringArray, Index))};
 			StringArray.Add(FromJavaString(JavaString));
+			Env->DeleteLocalRef(JavaString);
 		}
 
 		return StringArray;
@@ -690,10 +723,12 @@ jstring AndroidNative_JavaConverter::ToJavaString(const FString& String)
 #if PLATFORM_ANDROID
 	if (JNIEnv* Env = FAndroidApplication::GetJavaEnv())
 	{
-		const jstring LocalJavaString = Env->NewStringUTF(TCHAR_TO_UTF8(*String));
-		const jstring GlobalJavaString{static_cast<jstring>(Env->NewGlobalRef(LocalJavaString))};
-		Env->DeleteLocalRef(LocalJavaString);
-		return GlobalJavaString;
+		// Return a local reference. It stays valid for the duration of the enclosing
+		// native call (where it is passed as an argument to the Java method) and is
+		// reclaimed automatically when control returns to the JVM. The previous
+		// implementation created a global reference that was never deleted, leaking
+		// one JNI global ref per converted string (e.g. every CopyTextToClipboard call).
+		return Env->NewStringUTF(TCHAR_TO_UTF8(*String));
 	}
 
 	UE_LOG(LogAndroidNative, Error, TEXT("Failed to Java Environment! Check if JavaVM is valid"));
@@ -714,7 +749,9 @@ jobjectArray AndroidNative_JavaConverter::ToJavaStringArray(const TArray<FString
 		jobjectArray JavaStringArray{Env->NewObjectArray(StringArray.Num(), FJavaWrapper::JavaStringClass, nullptr)};
 		for (TArray<FString>::SizeType Index = 0; Index < StringArray.Num(); ++Index)
 		{
-			Env->SetObjectArrayElement(JavaStringArray, Index, ToJavaString(StringArray[Index]));
+			const jstring Element = ToJavaString(StringArray[Index]);
+			Env->SetObjectArrayElement(JavaStringArray, Index, Element);
+			Env->DeleteLocalRef(Element);
 		}
 
 		return JavaStringArray;

@@ -17,12 +17,16 @@ import android.content.res.Resources;
 import androidx.core.os.ConfigurationCompat;
 import android.location.Location;
 import android.location.LocationManager;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import android.content.res.Configuration;
 
 import android.content.ClipData;
 import android.content.ClipboardManager;
+
+// Connectivity
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkInfo;
 
 // Hardware / Intents
 import android.content.Intent;
@@ -76,35 +80,63 @@ public class DeviceInfo {
     @Keep
     public static String GetGeoLocation(final Activity activity)
     {
-        Context context = activity;
-        LocationManager mLocationManager = (LocationManager)context.getSystemService(context.LOCATION_SERVICE);
-        Location locationGPS = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-        Location locationNet = mLocationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-    
-        long GPSLocationTime = 0;
-        if (null != locationGPS) { GPSLocationTime = locationGPS.getTime(); }
-    
-        long NetLocationTime = 0;
-    
-        if (null != locationNet) {
-            NetLocationTime = locationNet.getTime();
-        }
-    
-        if ( 0 < GPSLocationTime - NetLocationTime ) {
-            return locationGPS.toString();
-        }
-        else {
+        try {
+            Context context = activity;
+            LocationManager mLocationManager = (LocationManager)context.getSystemService(Context.LOCATION_SERVICE);
+            if (mLocationManager == null) {
+                return "";
+            }
+
+            Location locationGPS = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            Location locationNet = mLocationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+
+            if (locationGPS == null && locationNet == null) {
+                return "";
+            }
+            if (locationGPS == null) {
+                return locationNet.toString();
+            }
+            if (locationNet == null) {
+                return locationGPS.toString();
+            }
+
+            if (locationGPS.getTime() - locationNet.getTime() > 0) {
+                return locationGPS.toString();
+            }
             return locationNet.toString();
+        } catch (SecurityException e) {
+            // Missing ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION permission
+            return "";
+        } catch (Exception e) {
+            return "";
         }
     }
 
     @Keep
-    public static boolean IsInternetAvailable() {
+    public static boolean IsInternetAvailable(final Activity activity) {
         try {
-            InetAddress address = InetAddress.getByName("www.google.com");
-            return !address.equals("");
-        } catch (UnknownHostException e) { }
-        return false;
+            Context context = activity;
+            ConnectivityManager connectivityManager =
+                (ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (connectivityManager == null) {
+                return false;
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Network network = connectivityManager.getActiveNetwork();
+                if (network == null) {
+                    return false;
+                }
+                NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(network);
+                return capabilities != null
+                    && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+            }
+
+            NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
+            return networkInfo != null && networkInfo.isConnected();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
@@ -116,17 +148,17 @@ public class DeviceInfo {
 	public static byte GetCurrentSystemTheme(final Activity activity) {
 
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-			return -1;
+			return 0;
 		}
         Configuration config = activity.getResources().getConfiguration();
         
-		switch (config.uiMode & config.UI_MODE_NIGHT_MASK) {
+		switch (config.uiMode & Configuration.UI_MODE_NIGHT_MASK) {
 			case Configuration.UI_MODE_NIGHT_NO:
-				return 0;
-			case Configuration.UI_MODE_NIGHT_YES:
 				return 1;
+			case Configuration.UI_MODE_NIGHT_YES:
+				return 2;
 		}
-		return -1;
+		return 0;
 	}
 	
 	/** Path to "storage/emulated/0/Android/data/data/%APP_PACKAGE_NAME%/" */

@@ -14,7 +14,7 @@ void UAndroidNativeLibrary::EnableNsdService(int32 InPort)
 
 bool UAndroidNativeLibrary::IsInternetAvailable()
 {
-	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "IsInternetAvailable");
+	return AndroidNativeUtils::CallJavaStaticMethod<bool>(DeviceInfoClassName, "IsInternetAvailable", FAndroidGameActivity());
 }
 
 FString UAndroidNativeLibrary::GetGeoLocation()
