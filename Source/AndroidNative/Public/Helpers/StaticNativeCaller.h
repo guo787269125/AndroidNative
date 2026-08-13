@@ -4,12 +4,73 @@
 
 #if PLATFORM_ANDROID
 #include "Android/AndroidApplication.h"
+#include "Misc/ScopeLock.h"
 #endif
 
 #include "JavaConvert.h"
 
 namespace StaticNativeCaller
 {
+#if PLATFORM_ANDROID
+	namespace Private
+	{
+		/**
+		 * Resolve a Java class by name once and cache it as a global reference.
+		 * Avoids a JNI class lookup (and a leaked local reference) on every call.
+		 */
+		static jclass GetCachedClass(JNIEnv* Env, const ANSICHAR* ClassName)
+		{
+			static TMap<FString, jclass> ClassCache;
+			static FCriticalSection CacheLock;
+
+			const FString Key = FString::Printf(TEXT("%hs"), ClassName);
+
+			FScopeLock Lock(&CacheLock);
+
+			if (jclass* Cached = ClassCache.Find(Key))
+			{
+				return *Cached;
+			}
+
+			const jclass LocalClass = FAndroidApplication::FindJavaClass(ClassName);
+			if (LocalClass == nullptr)
+			{
+				return nullptr;
+			}
+
+			// Promote to a global reference so it stays valid across calls, then drop the local ref.
+			const jclass GlobalClass = static_cast<jclass>(Env->NewGlobalRef(LocalClass));
+			Env->DeleteLocalRef(LocalClass);
+
+			ClassCache.Add(Key, GlobalClass);
+			return GlobalClass;
+		}
+
+		/**
+		 * Resolve a static method id once and cache it. Method ids are stable for the
+		 * lifetime of a loaded class, so this is safe to keep and reuse.
+		 */
+		static jmethodID GetCachedStaticMethod(JNIEnv* Env, jclass Class, const ANSICHAR* ClassName, const ANSICHAR* MethodName, const ANSICHAR* MethodSignature)
+		{
+			static TMap<FString, jmethodID> MethodCache;
+			static FCriticalSection CacheLock;
+
+			const FString Key = FString::Printf(TEXT("%hs|%hs|%hs"), ClassName, MethodName, MethodSignature);
+
+			FScopeLock Lock(&CacheLock);
+
+			if (jmethodID* Cached = MethodCache.Find(Key))
+			{
+				return *Cached;
+			}
+
+			const jmethodID Method = FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false);
+			MethodCache.Add(Key, Method);
+			return Method;
+		}
+	}
+#endif
+
 	/**
      * Call java static method with no return type
      */
@@ -22,15 +83,14 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
 			Env->CallStaticVoidMethodV(Class, Method, Args);
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
 			return;
 		}
 		UE_LOG(LogAndroidNative, Error, TEXT("Failed to get Java Environment! Check if JavaVM is valid"));
@@ -51,15 +111,14 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
 			bool Result{AndroidNative_JavaConverter::FromJavaBool(Env->CallStaticBooleanMethodV(Class, Method, Args))};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
 			return Result;
 		}
 
@@ -83,15 +142,19 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
-			TArray<bool> Result{AndroidNative_JavaConverter::FromJavaBoolArray(static_cast<jbooleanArray>(Env->CallStaticObjectMethodV(Class, Method, Args)))};
+			jobject ResultObject{Env->CallStaticObjectMethodV(Class, Method, Args)};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
+			TArray<bool> Result{AndroidNative_JavaConverter::FromJavaBoolArray(static_cast<jbooleanArray>(ResultObject))};
+			if (ResultObject != nullptr)
+			{
+				Env->DeleteLocalRef(ResultObject);
+			}
 			return Result;
 		}
 
@@ -115,15 +178,14 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
 			uint8 Result{AndroidNative_JavaConverter::FromJavaByte(Env->CallStaticByteMethodV(Class, Method, Args))};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
 			return Result;
 		}
 
@@ -147,15 +209,19 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
-			TArray<uint8> Result{AndroidNative_JavaConverter::FromJavaByteArray(static_cast<jbyteArray>(Env->CallStaticObjectMethodV(Class, Method, Args)))};
+			jobject ResultObject{Env->CallStaticObjectMethodV(Class, Method, Args)};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
+			TArray<uint8> Result{AndroidNative_JavaConverter::FromJavaByteArray(static_cast<jbyteArray>(ResultObject))};
+			if (ResultObject != nullptr)
+			{
+				Env->DeleteLocalRef(ResultObject);
+			}
 			return Result;
 		}
 
@@ -179,15 +245,14 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
 			UTF16CHAR Result{AndroidNative_JavaConverter::FromJavaChar(Env->CallStaticCharMethodV(Class, Method, Args))};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
 			return Result;
 		}
 
@@ -211,15 +276,19 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
-			TArray<UTF16CHAR> Result{AndroidNative_JavaConverter::FromJavaCharArray(static_cast<jcharArray>(Env->CallStaticObjectMethodV(Class, Method, Args)))};
+			jobject ResultObject{Env->CallStaticObjectMethodV(Class, Method, Args)};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
+			TArray<UTF16CHAR> Result{AndroidNative_JavaConverter::FromJavaCharArray(static_cast<jcharArray>(ResultObject))};
+			if (ResultObject != nullptr)
+			{
+				Env->DeleteLocalRef(ResultObject);
+			}
 			return Result;
 		}
 
@@ -243,15 +312,13 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
 			short Result{AndroidNative_JavaConverter::FromJavaShort(Env->CallStaticShortMethodV(Class, Method, Args))};
 			va_end(Args);
-
-			Env->DeleteLocalRef(Class);
 
 			return Result;
 		}
@@ -276,15 +343,19 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
-			TArray<short> Result{AndroidNative_JavaConverter::FromJavaShortArray(static_cast<jshortArray>(Env->CallStaticObjectMethodV(Class, Method, Args)))};
+			jobject ResultObject{Env->CallStaticObjectMethodV(Class, Method, Args)};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
+			TArray<short> Result{AndroidNative_JavaConverter::FromJavaShortArray(static_cast<jshortArray>(ResultObject))};
+			if (ResultObject != nullptr)
+			{
+				Env->DeleteLocalRef(ResultObject);
+			}
 			return Result;
 		}
 
@@ -308,15 +379,14 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
 			int32 Result{AndroidNative_JavaConverter::FromJavaInt(Env->CallStaticIntMethodV(Class, Method, Args))};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
 			return Result;
 		}
 
@@ -340,15 +410,19 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
-			TArray<int32> Result{AndroidNative_JavaConverter::FromJavaIntArray(static_cast<jintArray>(Env->CallStaticObjectMethodV(Class, Method, Args)))};
+			jobject ResultObject{Env->CallStaticObjectMethodV(Class, Method, Args)};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
+			TArray<int32> Result{AndroidNative_JavaConverter::FromJavaIntArray(static_cast<jintArray>(ResultObject))};
+			if (ResultObject != nullptr)
+			{
+				Env->DeleteLocalRef(ResultObject);
+			}
 			return Result;
 		}
 
@@ -372,15 +446,14 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
 			long Result{AndroidNative_JavaConverter::FromJavaLong(Env->CallStaticLongMethodV(Class, Method, Args))};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
 			return Result;
 		}
 
@@ -404,15 +477,19 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
-			TArray<long> Result{AndroidNative_JavaConverter::FromJavaLongArray(static_cast<jlongArray>(Env->CallStaticObjectMethodV(Class, Method, Args)))};
+			jobject ResultObject{Env->CallStaticObjectMethodV(Class, Method, Args)};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
+			TArray<long> Result{AndroidNative_JavaConverter::FromJavaLongArray(static_cast<jlongArray>(ResultObject))};
+			if (ResultObject != nullptr)
+			{
+				Env->DeleteLocalRef(ResultObject);
+			}
 			return Result;
 		}
 
@@ -436,15 +513,14 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
 			float Result{AndroidNative_JavaConverter::FromJavaFloat(Env->CallStaticFloatMethodV(Class, Method, Args))};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
 			return Result;
 		}
 
@@ -468,16 +544,19 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
-			TArray<float> Result{AndroidNative_JavaConverter::FromJavaFloatArray(static_cast<jfloatArray>(Env->CallStaticObjectMethodV(Class, Method, Args)))};
+			jobject ResultObject{Env->CallStaticObjectMethodV(Class, Method, Args)};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
-
+			TArray<float> Result{AndroidNative_JavaConverter::FromJavaFloatArray(static_cast<jfloatArray>(ResultObject))};
+			if (ResultObject != nullptr)
+			{
+				Env->DeleteLocalRef(ResultObject);
+			}
 			return MoveTemp(Result);
 		}
 
@@ -501,15 +580,14 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
 			double Result{AndroidNative_JavaConverter::FromJavaDouble(Env->CallStaticDoubleMethodV(Class, Method, Args))};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
 			return Result;
 		}
 
@@ -533,15 +611,19 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
-			TArray<double> Result{AndroidNative_JavaConverter::FromJavaDoubleArray(static_cast<jdoubleArray>(Env->CallStaticObjectMethodV(Class, Method, Args)))};
+			jobject ResultObject{Env->CallStaticObjectMethodV(Class, Method, Args)};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
+			TArray<double> Result{AndroidNative_JavaConverter::FromJavaDoubleArray(static_cast<jdoubleArray>(ResultObject))};
+			if (ResultObject != nullptr)
+			{
+				Env->DeleteLocalRef(ResultObject);
+			}
 			return Result;
 		}
 
@@ -565,15 +647,19 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
-			FString Result{AndroidNative_JavaConverter::FromJavaString(static_cast<jstring>(Env->CallStaticObjectMethodV(Class, Method, Args)))};
+			jobject ResultObject{Env->CallStaticObjectMethodV(Class, Method, Args)};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
+			FString Result{AndroidNative_JavaConverter::FromJavaString(static_cast<jstring>(ResultObject))};
+			if (ResultObject != nullptr)
+			{
+				Env->DeleteLocalRef(ResultObject);
+			}
 			return Result;
 		}
 
@@ -597,15 +683,19 @@ namespace StaticNativeCaller
 #if PLATFORM_ANDROID
 		if (JNIEnv* Env{FAndroidApplication::GetJavaEnv()})
 		{
-			const jclass Class{FAndroidApplication::FindJavaClass(ClassName)};
-			const jmethodID Method{FJavaWrapper::FindStaticMethod(Env, Class, MethodName, MethodSignature, false)};
+			const jclass Class{Private::GetCachedClass(Env, ClassName)};
+			const jmethodID Method{Private::GetCachedStaticMethod(Env, Class, ClassName, MethodName, MethodSignature)};
 
 			va_list Args;
 			va_start(Args, MethodSignature);
-			TArray<FString> Result{AndroidNative_JavaConverter::FromJavaStringArray(static_cast<jobjectArray>(Env->CallStaticObjectMethodV(Class, Method, Args)))};
+			jobject ResultObject{Env->CallStaticObjectMethodV(Class, Method, Args)};
 			va_end(Args);
 
-			Env->DeleteLocalRef(Class);
+			TArray<FString> Result{AndroidNative_JavaConverter::FromJavaStringArray(static_cast<jobjectArray>(ResultObject))};
+			if (ResultObject != nullptr)
+			{
+				Env->DeleteLocalRef(ResultObject);
+			}
 			return Result;
 		}
 

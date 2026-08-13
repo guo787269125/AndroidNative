@@ -123,6 +123,10 @@ namespace AndroidNative_JavaConverter
 	ANDROIDNATIVE_API jintArray ToJavaIntArray(const TArray<int32>& IntArray);
 
 
+	// Note: Java's 'long' is always 64-bit, but C++ 'long' is 32-bit on some platforms
+	// (e.g. Win64/LLP64). On Android (LP64) 'long' is 64-bit so these are 1:1, but if you
+	// ever consume these converters off-device prefer int64/jlong to avoid truncation.
+
 	/** Convert jlong to long */
 	ANDROIDNATIVE_API long FromJavaLong(const jlong JavaLong);
 
