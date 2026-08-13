@@ -17,6 +17,7 @@ import android.content.res.Resources;
 import androidx.core.os.ConfigurationCompat;
 import android.location.Location;
 import android.location.LocationManager;
+import android.location.LocationListener;
 import android.content.res.Configuration;
 
 import android.content.ClipData;
@@ -95,6 +96,7 @@ public class DeviceInfo {
 	@Keep public static native void nativeOnActivityResult(int requestCode, int resultCode, String dataUri);
 	@Keep public static native void nativeOnLifecycle(int lifecycleEvent);
 	@Keep public static native void nativeOnSensorChanged(int sensorType, float x, float y, float z);
+	@Keep public static native void nativeOnLocationResult(int requestId, boolean success, double latitude, double longitude);
 
 	@Keep
 	public static void startNsdService(final Activity activity, int Port) {
@@ -1138,6 +1140,59 @@ public class DeviceInfo {
 			return NotificationManagerCompat.from(activity).areNotificationsEnabled();
 		} catch (Exception e) {
 			return false;
+		}
+	}
+
+	/**
+	 * Request a single fresh location fix. Requires ACCESS_FINE_LOCATION or
+	 * ACCESS_COARSE_LOCATION to be granted. The result is delivered via nativeOnLocationResult.
+	 */
+	@Keep
+	public static void RequestSingleLocation(final Activity activity, final int requestId) {
+		try {
+			final LocationManager locationManager = (LocationManager) activity.getSystemService(Context.LOCATION_SERVICE);
+			if (locationManager == null) {
+				nativeOnLocationResult(requestId, false, 0.0, 0.0);
+				return;
+			}
+
+			final String provider;
+			if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+				provider = LocationManager.GPS_PROVIDER;
+			} else if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+				provider = LocationManager.NETWORK_PROVIDER;
+			} else {
+				nativeOnLocationResult(requestId, false, 0.0, 0.0);
+				return;
+			}
+
+			final LocationListener[] holder = new LocationListener[1];
+			LocationListener listener = new LocationListener() {
+				@Override
+				public void onLocationChanged(Location location) {
+					try { locationManager.removeUpdates(holder[0]); } catch (Exception e) {}
+					nativeOnLocationResult(requestId, true, location.getLatitude(), location.getLongitude());
+				}
+
+				@Override public void onStatusChanged(String p, int s, android.os.Bundle b) {}
+				@Override public void onProviderEnabled(String p) {}
+				@Override public void onProviderDisabled(String p) {}
+			};
+			holder[0] = listener;
+
+			// requestSingleUpdate with a null Looper uses the calling thread's looper, so run it on the UI thread.
+			activity.runOnUiThread(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						locationManager.requestSingleUpdate(provider, holder[0], null);
+					} catch (Exception e) {
+						nativeOnLocationResult(requestId, false, 0.0, 0.0);
+					}
+				}
+			});
+		} catch (Exception e) {
+			nativeOnLocationResult(requestId, false, 0.0, 0.0);
 		}
 	}
 }
